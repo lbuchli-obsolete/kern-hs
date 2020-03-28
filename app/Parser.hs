@@ -4,75 +4,104 @@ import Language
 import Lexer
 import Util
 
--- TODO? [Token] -> (a, [Token])
-type Parser a = [Token] -> [(a, [Token])]
 
-pOr :: Parser a -> Parser a -> Parser a
-pOr p1 p2 tokens = p1 tokens ++ p2 tokens 
+type Parser a = [Token] -> ParseResult a
+
+type ParseResult a = Either (a, [Token]) String
+
+pOrElse :: Parser a -> Parser a -> Parser a
+pOrElse p1 p2 tokens = orP2 (p1 tokens)
+  where
+    orP2 (Left a)  = Left a
+    orP2 (Right _) = p2 tokens
+
+pAnd :: ParseResult a -> Parser b -> ParseResult b
+pAnd (Left (_, tokens)) p = p tokens
+pAnd (Right msg) _        = Right msg
 
 pThen :: (a -> b -> c) -> Parser a -> Parser b -> Parser c
-pThen combine p1 p2 tokens = [ (combine v1 v2, toks2) |
-                               (v1, toks1) <- p1 tokens,
-                               (v2, toks2) <- p2 toks1]
+pThen combine p1 p2 tokens = res p1res p2res
+  where
+    p1res = p1 tokens
+    p2res = pAnd p1res p2
+    res (Left (a, _)) (Left (b, toks)) = Left (combine a b, toks)
+    res (Right msg) _                  = Right msg
+    res _ (Right msg)                  = Right msg
 
 pThen3 :: (a -> b -> c -> d) -> Parser a -> Parser b -> Parser c -> Parser d
-pThen3 combine p1 p2 p3 tokens = [ (combine v1 v2 v3, toks3) |
-                                   (v1, toks1) <- p1 tokens,
-                                   (v2, toks2) <- p2 toks1,
-                                   (v3, toks3) <- p3 toks2]
+pThen3 combine p1 p2 p3 tokens = res p1res p2res p3res
+  where
+    p1res = p1 tokens
+    p2res = pAnd p1res p2
+    p3res = pAnd p2res p3
+    res (Left (a, _)) (Left (b, _)) (Left (c, toks)) = Left (combine a b c, toks)
+    res (Right msg) _ _                              = Right msg
+    res _ (Right msg) _                              = Right msg
+    res _ _ (Right msg)                              = Right msg
 
--- TODO is there a way to generalize this?
 pThen4 :: (a -> b -> c -> d -> e) -> Parser a -> Parser b -> Parser c -> Parser d -> Parser e
-pThen4 combine p1 p2 p3 p4 tokens = [ (combine v1 v2 v3 v4, toks4) |
-                                      (v1, toks1) <- p1 tokens,
-                                      (v2, toks2) <- p2 toks1,
-                                      (v3, toks3) <- p3 toks2,
-                                      (v4, toks4) <- p4 toks3]
+pThen4 combine p1 p2 p3 p4 tokens = res p1res p2res p3res p4res
+  where
+    p1res = p1 tokens
+    p2res = pAnd p1res p2
+    p3res = pAnd p2res p3
+    p4res = pAnd p3res p4
+    res (Left (a, _)) (Left (b, _)) (Left (c, _)) (Left (d, toks)) = Left (combine a b c d, toks)
+    res (Right msg) _ _ _                                          = Right msg
+    res _ (Right msg) _ _                                          = Right msg
+    res _ _ (Right msg) _                                          = Right msg
+    res _ _ _ (Right msg)                                          = Right msg
 
 pZeroOrMore :: Parser a -> Parser [a]
-pZeroOrMore p = pEmpty [] `pOr` pOneOrMore p
+pZeroOrMore p = pOneOrMore p `pOrElse` pEmpty [] 
 
--- here, only the first parsing possibility is chosen, because the others follow from it
--- and are just wasted computing time
 pOneOrMore :: Parser a -> Parser [a]
-pOneOrMore p = take 1 . pThen (:) p (pZeroOrMore p)
+pOneOrMore p = pThen (:) p (pZeroOrMore p)
  
 pEmpty :: a -> Parser a
-pEmpty a toks = [(a, toks)]
+pEmpty a toks = Left (a, toks)
 
 pApply :: Parser a -> (a -> b) -> Parser b
-pApply p1 f toks = [(f a, rest) | (a, rest) <- p1 toks]
+pApply p1 f toks = mapLeft (\x -> (f (fst x), snd x)) p1res
+  where
+    p1res = p1 toks
 
 pOneOrMoreWithSep :: Parser a -> Parser b -> Parser [a]
-pOneOrMoreWithSep p1 p2 = pThen (:) p1 (pThen (\_ x -> x) p2 (pOneOrMoreWithSep p1 p2) `pOr` pEmpty [])
+pOneOrMoreWithSep p1 p2 = pThen (:) p1 (pThen (\_ x -> x) p2 (pOneOrMoreWithSep p1 p2) `pOrElse` pEmpty [])
 
 pSat :: (String -> Bool) -> Parser String
-pSat f (tok:toks) | f (third tok) = [(third tok, toks)]
-pSat _ _ = [] 
+pSat f (tok:toks) | f (third tok) = Left (third tok, toks)
+pSat _ _                          = Right "Token does not satisfy property"
 
+-- Implementing this with pSat would be easier, but does not lead to very useful error messages
+-- and thus is implemented from scratch
 pLit :: String -> Parser String
-pLit s = pSat (== s)
+pLit s (tok:toks) | s == third tok = Left (third tok, toks)
+pLit s _                           = Right ("Expected '" ++ s ++ "'")
+
+pNotOf :: [String] -> Parser String
+pNotOf blacklist (tok:toks) | third tok `notElem` blacklist = Left (third tok, toks)
+pNotOf blacklist _                                          = Right ("Token is one of " ++ show blacklist)
 
 pType :: TokenType -> Parser String
-pType t (tok:toks) | second tok == t = [(third tok, toks)]
-pType _ _ = []
+pType t (tok:toks) | second tok == t = Left (third tok, toks)
+pType t _                            = Right ("Expected token of type " ++ show t)
 
 pNum :: Parser Integer
 pNum = pType KNumber `pApply` read
 
 pVar :: Parser String
-pVar = pType KVariable
+pVar toks = both (pType KVariable toks) (pNotOf keywords toks)
+  where
+    both (Left (res, tokens)) (Left _) = Left (res, tokens)
+    both _ _                           = Right "Expected a variable"
 
 ------------------------------------------------------------------------
 --                        Kern specific parsing                       --
 ------------------------------------------------------------------------
 
-kParse :: [Token] -> KernProgram
-kParse = take_first_parse . pProgram
-  where
-    take_first_parse ((prog, []) : _) = prog
-    take_first_parse (_ : others)     = take_first_parse others
-    take_first_parse _                = error "Syntax Error :("
+kParse :: [Token] -> Either KernProgram String
+kParse toks = mapLeft fst (pProgram toks)
 
 pProgram :: Parser KernProgram
 pProgram = pOneOrMoreWithSep pSc (pLit ";")
@@ -84,17 +113,17 @@ mkSc :: String -> [String] -> String -> KernExpr -> (Name, [Name], KernExpr)
 mkSc name vars _ body = (name, vars, body)
 
 pExpr :: Parser KernExpr
-pExpr = pAExpr
-  `pOr` pLambda
-  `pOr` pCase
-  `pOr` pLet
-  `pOr` pThen EAp pExpr pAExpr
+pExpr =     pLambda
+  `pOrElse` pCase
+  `pOrElse` pLet
+  `pOrElse` pThen EAp pAExpr pExpr
+  `pOrElse` pAExpr
 
 pAExpr :: Parser KernExpr
 pAExpr = pThen3 (\_ x _ -> x) (pLit "(") pExpr (pLit ")")
-  `pOr` pConst
-  `pOr` (pNum `pApply` ENum)
-  `pOr` (pVar `pApply` EVar)
+  `pOrElse` pConst
+  `pOrElse` (pNum `pApply` ENum)
+  `pOrElse` (pVar `pApply` EVar)
 
 pLambda :: Parser KernExpr
 pLambda = pThen4 mkLam (pLit "\\") (pOneOrMore pVar) (pLit "->") pExpr
@@ -120,7 +149,7 @@ mkAlter int vars _ body = (int, vars, body)
 
 pLet :: Parser KernExpr
 pLet = pThen4 mkLet
-  ((pLit "let" `pOr` pLit "letrec") `pApply` (== "letrec"))
+  ((pLit "let" `pOrElse` pLit "letrec") `pApply` (== "letrec"))
   (pOneOrMoreWithSep pDef (pLit ";"))
   (pLit "in")
   pExpr

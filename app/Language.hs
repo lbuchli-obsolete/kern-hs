@@ -72,7 +72,7 @@ pprint (ELam args body) = foldl (\prev x -> prev ++ " " ++ x) "\\" args ++
 -- Pretty-print a Kern supercombinator
 pprintSc :: KernScDefn -> String
 pprintSc sc = first sc ++ " " ++
-  (foldl (\prev x -> prev ++ " " ++ x) " " (second sc)) ++
+  foldl (\prev x -> prev ++ " " ++ x) " " (second sc) ++
   " = " ++ pprint (third sc)
 
 -- Pretty-print a Kern program

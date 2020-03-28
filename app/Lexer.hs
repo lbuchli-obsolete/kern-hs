@@ -32,3 +32,6 @@ isIdChar c = isAlpha c || isDigit c || (c == '_')
 
 twoCharOps :: [String]
 twoCharOps = ["==", "!=", ">=", "<=", "=>", "->"]
+
+keywords :: [String]
+keywords = ["let", "letrec", "case", "in", "of", "Pack"]
