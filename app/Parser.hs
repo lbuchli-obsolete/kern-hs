@@ -116,6 +116,7 @@ pExpr :: Parser KernExpr
 pExpr =     pLambda
   `pOrElse` pCase
   `pOrElse` pLet
+  `pOrElse` pInfixExpr
   `pOrElse` pThen EAp pAExpr pExpr
   `pOrElse` pAExpr
 
@@ -125,6 +126,12 @@ pAExpr = pThen3 (\_ x _ -> x) (pLit "(") pExpr (pLit ")")
   `pOrElse` (pNum `pApply` ENum)
   `pOrElse` (pVar `pApply` EVar)
 
+-- TODO precedence
+pInfixExpr :: Parser KernExpr
+pInfixExpr = pThen3 (\a o b -> EAp (EAp (EVar o) a) b) pAExpr
+  (pLit "*" `pOrElse` pLit "/" `pOrElse` pLit "+" `pOrElse` pLit "-" `pOrElse` pLit "&" `pOrElse` pLit "|")
+  (pInfixExpr `pOrElse` pExpr)
+  
 pLambda :: Parser KernExpr
 pLambda = pThen4 mkLam (pLit "\\") (pOneOrMore pVar) (pLit "->") pExpr
 

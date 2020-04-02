@@ -5,6 +5,7 @@ module Main where
 import Language
 import Lexer
 import Parser
+import TemplateInst
 import Util
 
 main :: IO ()
@@ -22,3 +23,4 @@ main = do
                                           "    <1> => 2;",
                                           "    <2> => 5;"
                                                ])))))
+  print . mapLeft eval . mapLeft compile . kParse $ klex 0 "main = 3"
