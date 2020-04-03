@@ -23,4 +23,8 @@ main = do
                                           "    <1> => 2;",
                                           "    <2> => 5;"
                                                ])))))
-  print . mapLeft eval . mapLeft compile . kParse $ klex 0 "main = 3"
+  putStrLn . either id id
+    . mapLeft showResults
+    . mapLeft eval
+    . mapLeft compile
+    . kParse $ klex 0 "main = id id 12"

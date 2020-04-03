@@ -116,21 +116,48 @@ pExpr :: Parser KernExpr
 pExpr =     pLambda
   `pOrElse` pCase
   `pOrElse` pLet
-  `pOrElse` pInfixExpr
-  `pOrElse` pThen EAp pAExpr pExpr
-  `pOrElse` pAExpr
-
+  `pOrElse` pExpr1
 pAExpr :: Parser KernExpr
 pAExpr = pThen3 (\_ x _ -> x) (pLit "(") pExpr (pLit ")")
   `pOrElse` pConst
   `pOrElse` (pNum `pApply` ENum)
   `pOrElse` (pVar `pApply` EVar)
 
--- TODO precedence
-pInfixExpr :: Parser KernExpr
-pInfixExpr = pThen3 (\a o b -> EAp (EAp (EVar o) a) b) pAExpr
-  (pLit "*" `pOrElse` pLit "/" `pOrElse` pLit "+" `pOrElse` pLit "-" `pOrElse` pLit "&" `pOrElse` pLit "|")
-  (pInfixExpr `pOrElse` pExpr)
+-- Ugh. Precedence climbing is ugly.
+pExpr1 :: Parser KernExpr
+pExpr1 = mkInfix1 pExpr1 (pLit "|") pExpr2
+pExpr2 :: Parser KernExpr
+pExpr2 = mkInfix1 pExpr2 (pLit "&") pExpr3
+pExpr3 :: Parser KernExpr
+pExpr3 = mkInfix1 pExpr3 pRelop pExpr4
+pExpr4 :: Parser KernExpr
+pExpr4 = mkInfix2 pExpr4 (pLit "+") (pLit "-") pExpr5
+pExpr5 :: Parser KernExpr
+pExpr5 = mkInfix2 pExpr5 (pLit "*") (pLit "/") pExpr6
+pExpr6 :: Parser KernExpr
+pExpr6 = pOneOrMore pAExpr `pApply` mk_ap_chain
+  where
+    mk_ap_chain exprs | length exprs > 1 = EAp (mk_ap_chain (init exprs)) (last exprs)
+    mk_ap_chain (expr:_)                 = expr
+    mk_ap_chain []                       = ENum 42 -- the answer for all seemingly impossible states is 42.
+
+
+mkInfix :: KernExpr -> String -> KernExpr -> KernExpr
+mkInfix a o = EAp (EAp (EVar o) a)
+
+mkInfix1 :: Parser KernExpr -> Parser String -> Parser KernExpr -> Parser KernExpr
+mkInfix1 p1 s p2 = pThen3 mkInfix p2 s p1 `pOrElse` p2
+
+mkInfix2 :: Parser KernExpr -> Parser String -> Parser String -> Parser KernExpr -> Parser KernExpr
+mkInfix2 p1 s1 s2 p2 = pThen3 mkInfix p2 s1 p1 `pOrElse` pThen3 mkInfix p2 s2 p1 `pOrElse` p2
+
+pRelop :: Parser String
+pRelop =    (pLit "<")
+  `pOrElse` (pLit "<=")
+  `pOrElse` (pLit "==")
+  `pOrElse` (pLit "!=")
+  `pOrElse` (pLit ">=")
+  `pOrElse` (pLit ">")
   
 pLambda :: Parser KernExpr
 pLambda = pThen4 mkLam (pLit "\\") (pOneOrMore pVar) (pLit "->") pExpr

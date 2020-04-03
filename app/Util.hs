@@ -116,7 +116,7 @@ iInterleave _ (seq1 : _)                            = seq1
 iInterleave _ _                                     = INil
 
 iIndent seq' = seq'
-iNewline    = IStr "\n"
+iNewline     = IStr "\n"
 
 iNum :: Integer -> Iseq
 iNum n = iStr (show n)

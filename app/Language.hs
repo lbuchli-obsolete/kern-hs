@@ -46,7 +46,7 @@ isAtomicExpr _        = False
 
 preludeDefs :: KernProgram
 preludeDefs = [
-  ("ident", ["x"], EVar "x"),
+  ("id", ["x"], EVar "x"),
   ("fst", ["x", "y"], EVar "x"),
   ("snd", ["x", "y"], EVar "y"),
   ("s", ["f", "g", "x"], EAp (EAp (EVar "f") (EVar "x")) (EAp (EVar "g") (EVar "x"))),
