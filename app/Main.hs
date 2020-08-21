@@ -1,12 +1,6 @@
 module Main where
 
--- import Lib
-
-import Language
-import Lexer
-import Parser
-import TemplateInst
-import Util
+import Lib
 
 main :: IO ()
 main = do

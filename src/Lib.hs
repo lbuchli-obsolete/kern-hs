@@ -1,6 +1,8 @@
 module Lib
-    ( someFunc
-    ) where
+    ( eval, compile, klex, kParse, pprintProg, showResults, mapLeft ) where
 
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+import Language
+import Lexer
+import Parser
+import TemplateInst
+import Util
