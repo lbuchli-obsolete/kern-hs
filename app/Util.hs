@@ -73,7 +73,7 @@ type Map a b = [(a, b)]
 aLookup :: Eq a => Show a => Map a b -> a -> b
 aLookup ((k, v):bs) k' | k == k' = v
                        | k /= k' = aLookup bs k'
-aLookup _ k'                     = error ("Can't find #" ++ show k' ++ " in map.")
+aLookup m k'                     = error ("Can't find key " ++ show k' ++ " in map " ++ show (aDomain m))
 
 aDomain :: Map a b -> [a]
 aDomain aMap = [key | (key, _) <- aMap]
@@ -118,8 +118,8 @@ iInterleave _ _                                     = INil
 iIndent seq' = seq'
 iNewline     = IStr "\n"
 
-iNum :: Integer -> Iseq
-iNum n = iStr (show n)
+iShow :: Show a => a -> Iseq
+iShow x = iStr (show x)
 
 iFWNum :: Int -> Integer -> Iseq
 iFWNum width n = iStr $ space (width - length digits) ++ digits

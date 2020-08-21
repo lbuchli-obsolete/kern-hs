@@ -27,4 +27,14 @@ main = do
     . mapLeft showResults
     . mapLeft eval
     . mapLeft compile
-    . kParse $ klex 0 "main = id id 12"
+    . kParse . klex 0 $ unlines [
+    "pair x y f = f x y;",
+    "first p = p fst;",
+    "second p = p snd;",
+    "f x y = letrec",
+    "        a = pair x b;",
+    "        b = pair y a",
+    "    in",
+    "        first (second (second (second a)));",
+    "main = f 3 4;"
+                                ]
